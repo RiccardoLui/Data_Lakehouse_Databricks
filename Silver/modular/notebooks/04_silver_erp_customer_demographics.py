@@ -20,6 +20,9 @@
 TABLE_KEY = "bronze_erp_cust_az12"
 CONFIG = TABLE_CONFIGS[TABLE_KEY]
 
+# CID is already unique after regex normalization; skip redundant deduplication.
+CONFIG.pop("dedupe", None)
+
 df_silver = clean_table(TABLE_KEY, CONFIG)
 
 display(df_silver)

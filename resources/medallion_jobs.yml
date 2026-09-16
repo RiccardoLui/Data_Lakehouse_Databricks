@@ -3,68 +3,93 @@ resources:
     medallion_batch_pipeline:
       name: medallion-batch-pipeline
       max_concurrent_runs: 1
+
       tags:
         architecture: medallion
         ingestion: batch
+
       tasks:
+        # ============================================================
+        # BRONZE
+        # ============================================================
         - task_key: bronze_batch
           notebook_task:
             notebook_path: ../Bronze/Bronze.ipynb
 
-        - task_key: silver_transform
+        # ============================================================
+        # SILVER - all six are independent
+        # Databricks will execute as many concurrently as allowed.
+        # ============================================================
+        - task_key: silver_crm_customer
           depends_on:
             - task_key: bronze_batch
           notebook_task:
-            notebook_path: ../Silver/modular/notebooks/Silver_orchestration.ipynb
+            notebook_path: ../Silver/modular/notebooks/01_silver_crm_customer.py
 
-        - task_key: gold_transform
+        - task_key: silver_crm_product
           depends_on:
-            - task_key: silver_transform
+            - task_key: bronze_batch
           notebook_task:
-            notebook_path: ../Gold/Gold_orchestration.ipynb
+            notebook_path: ../Silver/modular/notebooks/02_silver_crm_product.py
 
+        - task_key: silver_crm_sales
+          depends_on:
+            - task_key: bronze_batch
+          notebook_task:
+            notebook_path: ../Silver/modular/notebooks/03_silver_crm_sales.py
+
+        - task_key: silver_erp_customer_demographics
+          depends_on:
+            - task_key: bronze_batch
+          notebook_task:
+            notebook_path: ../Silver/modular/notebooks/04_silver_erp_customer_demographics.py
+
+        - task_key: silver_erp_customer_location
+          depends_on:
+            - task_key: bronze_batch
+          notebook_task:
+            notebook_path: ../Silver/modular/notebooks/05_silver_erp_customer_location.py
+
+        - task_key: silver_erp_product_category
+          depends_on:
+            - task_key: bronze_batch
+          notebook_task:
+            notebook_path: ../Silver/modular/notebooks/06_silver_erp_product_category.py
+
+        # ============================================================
+        # GOLD
+        #
+        # Notice that Gold does NOT wait for the whole Silver layer.
+        # Each Gold table waits only for its actual inputs.
+        # ============================================================
+        - task_key: gold_dim_customers
+          depends_on:
+            - task_key: silver_crm_customer
+            - task_key: silver_erp_customer_demographics
+            - task_key: silver_erp_customer_location
+          notebook_task:
+            notebook_path: ../Gold/dim_customers.ipynb
+
+        - task_key: gold_dim_product
+          depends_on:
+            - task_key: silver_crm_product
+            - task_key: silver_erp_product_category
+          notebook_task:
+            notebook_path: ../Gold/dim_product.ipynb
+
+        - task_key: gold_fact_sales
+          depends_on:
+            - task_key: silver_crm_sales
+          notebook_task:
+            notebook_path: ../Gold/fact_sales.ipynb
+
+        # ============================================================
+        # GOVERNANCE
+        # ============================================================
         - task_key: governance_refresh
           depends_on:
-            - task_key: gold_transform
-          notebook_task:
-            notebook_path: ../Governance/governance_setup.py
-
-    medallion_streaming_pipeline:
-      name: medallion-streaming-pipeline
-      max_concurrent_runs: 1
-      tags:
-        architecture: medallion
-        ingestion: autoloader
-      parameters:
-        - name: batch_id
-          default: ${var.default_batch_id}
-      tasks:
-        # Simulates arrival of the next CSV batch in the landing volume.
-        - task_key: release_batch
-          notebook_task:
-            notebook_path: ../Setup/Data_ingestion.ipynb
-
-        # Auto Loader processes only the newly arrived CRM files.
-        - task_key: autoloader_ingestion
-          depends_on:
-            - task_key: release_batch
-          notebook_task:
-            notebook_path: ../Setup/Auto_loader.ipynb
-
-        - task_key: silver_transform
-          depends_on:
-            - task_key: autoloader_ingestion
-          notebook_task:
-            notebook_path: ../Silver/modular/notebooks/Silver_orchestration.ipynb
-
-        - task_key: gold_transform
-          depends_on:
-            - task_key: silver_transform
-          notebook_task:
-            notebook_path: ../Gold/Gold_orchestration.ipynb
-
-        - task_key: governance_refresh
-          depends_on:
-            - task_key: gold_transform
+            - task_key: gold_dim_customers
+            - task_key: gold_dim_product
+            - task_key: gold_fact_sales
           notebook_task:
             notebook_path: ../Governance/governance_setup.py

@@ -30,15 +30,15 @@ targets:
   # Free Edition has a single workspace and is intended for learning/non-commercial use.
   # This target gives you a stable "production-like" deployment without requiring
   # account-level service principals, which Free Edition cannot fully administer.
- # prod:
- #   workspace:
- #     root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
- #   permissions:
- #     - user_name: ${workspace.current_user.userName}
- #       level: CAN_MANAGE
- #   presets:
- #     name_prefix: "[prod] "
- #     jobs_max_concurrent_runs: 1
- #     tags:
- #       environment: prod
- #       managed_by: declarative_automation_bundles
+  prod:
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    permissions:
+      - user_name: ${workspace.current_user.userName}
+        level: CAN_MANAGE
+    presets:
+      name_prefix: "[prod] "
+      jobs_max_concurrent_runs: 1
+      tags:
+        environment: prod
+        managed_by: declarative_automation_bundles
