@@ -1,0 +1,5 @@
+databricks auth login --host https://dbc-82719662-2adb.cloud.databricks.com/browse/folders/workspace?o=7474651862029728
+databricks bundle validate -t dev
+databricks bundle deploy -t dev
+databricks bundle run medallion_batch_pipeline -t dev
+databricks bundle run -t dev --params batch_id=1 medallion_streaming_pipeline

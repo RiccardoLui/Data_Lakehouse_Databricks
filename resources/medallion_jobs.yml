@@ -1,5 +1,8 @@
 resources:
   jobs:
+    # ========================================================================
+    # BATCH PIPELINE
+    # ========================================================================
     medallion_batch_pipeline:
       name: medallion-batch-pipeline
       max_concurrent_runs: 1
@@ -9,17 +12,17 @@ resources:
         ingestion: batch
 
       tasks:
-        # ============================================================
+        # --------------------------------------------------------------------
         # BRONZE
-        # ============================================================
+        # --------------------------------------------------------------------
         - task_key: bronze_batch
           notebook_task:
             notebook_path: ../Bronze/Bronze.ipynb
 
-        # ============================================================
-        # SILVER - all six are independent
-        # Databricks will execute as many concurrently as allowed.
-        # ============================================================
+        # --------------------------------------------------------------------
+        # SILVER
+        # All six transformations are independent after Bronze.
+        # --------------------------------------------------------------------
         - task_key: silver_crm_customer
           depends_on:
             - task_key: bronze_batch
@@ -56,12 +59,26 @@ resources:
           notebook_task:
             notebook_path: ../Silver/modular/notebooks/06_silver_erp_product_category.py
 
-        # ============================================================
+        # --------------------------------------------------------------------
+        # SILVER DIAGNOSTICS
+        # Runs after all Silver transformations.
+        # Gold tasks do not wait for this task.
+        # --------------------------------------------------------------------
+        - task_key: silver_diagnostics
+          depends_on:
+            - task_key: silver_crm_customer
+            - task_key: silver_crm_product
+            - task_key: silver_crm_sales
+            - task_key: silver_erp_customer_demographics
+            - task_key: silver_erp_customer_location
+            - task_key: silver_erp_product_category
+          notebook_task:
+            notebook_path: ../Silver/modular/notebooks/07_silver_diagnostics.py
+
+        # --------------------------------------------------------------------
         # GOLD
-        #
-        # Notice that Gold does NOT wait for the whole Silver layer.
-        # Each Gold table waits only for its actual inputs.
-        # ============================================================
+        # Each Gold table waits only for the Silver tables it actually needs.
+        # --------------------------------------------------------------------
         - task_key: gold_dim_customers
           depends_on:
             - task_key: silver_crm_customer
@@ -83,13 +100,164 @@ resources:
           notebook_task:
             notebook_path: ../Gold/fact_sales.ipynb
 
-        # ============================================================
-        # GOVERNANCE
-        # ============================================================
-        - task_key: governance_refresh
+        # --------------------------------------------------------------------
+        # GOLD DIAGNOSTICS
+        # Runs after all Gold tables are available.
+        # --------------------------------------------------------------------
+        - task_key: gold_diagnostics
           depends_on:
             - task_key: gold_dim_customers
             - task_key: gold_dim_product
             - task_key: gold_fact_sales
+          notebook_task:
+            notebook_path: ../Gold/diagnostic_gold.ipynb
+
+        # --------------------------------------------------------------------
+        # GOVERNANCE
+        # Waits for both diagnostics branches.
+        # --------------------------------------------------------------------
+        - task_key: governance_refresh
+          depends_on:
+            - task_key: silver_diagnostics
+            - task_key: gold_diagnostics
+          notebook_task:
+            notebook_path: ../Governance/governance_setup.py
+
+
+    # ========================================================================
+    # STREAMING / AUTO LOADER PIPELINE
+    # Fully standalone alternative to the batch pipeline.
+    # ========================================================================
+    medallion_streaming_pipeline:
+      name: medallion-streaming-pipeline
+      max_concurrent_runs: 1
+
+      tags:
+        architecture: medallion
+        ingestion: autoloader
+
+      parameters:
+        - name: batch_id
+          default: ${var.default_batch_id}
+
+      tasks:
+        # --------------------------------------------------------------------
+        # RELEASE / LANDING
+        # Releases customer + sales batch N and initializes static source files
+        # only when they are missing.
+        # --------------------------------------------------------------------
+        - task_key: release_batch
+          notebook_task:
+            notebook_path: ../Setup/Data_ingestion.ipynb
+            base_parameters:
+              batch_id: "{{job.parameters.batch_id}}"
+
+        # --------------------------------------------------------------------
+        # BRONZE - AUTO LOADER
+        # Auto Loader handles all six Bronze tables with independent checkpoints.
+        # On later runs, unchanged source folders become no-ops.
+        # --------------------------------------------------------------------
+        - task_key: bronze_autoloader
+          depends_on:
+            - task_key: release_batch
+          notebook_task:
+            notebook_path: ../Setup/Auto_loader.ipynb
+
+        # --------------------------------------------------------------------
+        # SILVER
+        # Full Silver layer so this job is independent from the batch job.
+        # --------------------------------------------------------------------
+        - task_key: silver_crm_customer
+          depends_on:
+            - task_key: bronze_autoloader
+          notebook_task:
+            notebook_path: ../Silver/modular/notebooks/01_silver_crm_customer.py
+
+        - task_key: silver_crm_product
+          depends_on:
+            - task_key: bronze_autoloader
+          notebook_task:
+            notebook_path: ../Silver/modular/notebooks/02_silver_crm_product.py
+
+        - task_key: silver_crm_sales
+          depends_on:
+            - task_key: bronze_autoloader
+          notebook_task:
+            notebook_path: ../Silver/modular/notebooks/03_silver_crm_sales.py
+
+        - task_key: silver_erp_customer_demographics
+          depends_on:
+            - task_key: bronze_autoloader
+          notebook_task:
+            notebook_path: ../Silver/modular/notebooks/04_silver_erp_customer_demographics.py
+
+        - task_key: silver_erp_customer_location
+          depends_on:
+            - task_key: bronze_autoloader
+          notebook_task:
+            notebook_path: ../Silver/modular/notebooks/05_silver_erp_customer_location.py
+
+        - task_key: silver_erp_product_category
+          depends_on:
+            - task_key: bronze_autoloader
+          notebook_task:
+            notebook_path: ../Silver/modular/notebooks/06_silver_erp_product_category.py
+
+        # --------------------------------------------------------------------
+        # SILVER DIAGNOSTICS
+        # --------------------------------------------------------------------
+        - task_key: silver_diagnostics
+          depends_on:
+            - task_key: silver_crm_customer
+            - task_key: silver_crm_product
+            - task_key: silver_crm_sales
+            - task_key: silver_erp_customer_demographics
+            - task_key: silver_erp_customer_location
+            - task_key: silver_erp_product_category
+          notebook_task:
+            notebook_path: ../Silver/modular/notebooks/07_silver_diagnostics.py
+
+        # --------------------------------------------------------------------
+        # GOLD
+        # --------------------------------------------------------------------
+        - task_key: gold_dim_customers
+          depends_on:
+            - task_key: silver_crm_customer
+            - task_key: silver_erp_customer_demographics
+            - task_key: silver_erp_customer_location
+          notebook_task:
+            notebook_path: ../Gold/dim_customers.ipynb
+
+        - task_key: gold_dim_product
+          depends_on:
+            - task_key: silver_crm_product
+            - task_key: silver_erp_product_category
+          notebook_task:
+            notebook_path: ../Gold/dim_product.ipynb
+
+        - task_key: gold_fact_sales
+          depends_on:
+            - task_key: silver_crm_sales
+          notebook_task:
+            notebook_path: ../Gold/fact_sales.ipynb
+
+        # --------------------------------------------------------------------
+        # GOLD DIAGNOSTICS
+        # --------------------------------------------------------------------
+        - task_key: gold_diagnostics
+          depends_on:
+            - task_key: gold_dim_customers
+            - task_key: gold_dim_product
+            - task_key: gold_fact_sales
+          notebook_task:
+            notebook_path: ../Gold/diagnostic_gold.ipynb
+
+        # --------------------------------------------------------------------
+        # GOVERNANCE
+        # --------------------------------------------------------------------
+        - task_key: governance_refresh
+          depends_on:
+            - task_key: silver_diagnostics
+            - task_key: gold_diagnostics
           notebook_task:
             notebook_path: ../Governance/governance_setup.py
