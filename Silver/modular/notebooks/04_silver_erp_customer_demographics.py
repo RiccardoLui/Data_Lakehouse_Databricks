@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC # Silver - ERP Customer Demographics
 # MAGIC Cleans `bronze_erp_cust_az12` using the shared config and shared transformation functions.

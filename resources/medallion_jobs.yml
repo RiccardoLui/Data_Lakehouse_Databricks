@@ -15,7 +15,7 @@ resources:
           depends_on:
             - task_key: bronze_batch
           notebook_task:
-            notebook_path: ../Silver/modular/notebooks/Silver_orchestration.py
+            notebook_path: ../Silver/modular/notebooks/Silver_orchestration.ipynb
 
         - task_key: gold_transform
           depends_on:
@@ -55,7 +55,7 @@ resources:
           depends_on:
             - task_key: autoloader_ingestion
           notebook_task:
-            notebook_path: ../Silver/modular/notebooks/Silver_orchestration.py
+            notebook_path: ../Silver/modular/notebooks/Silver_orchestration.ipynb
 
         - task_key: gold_transform
           depends_on:

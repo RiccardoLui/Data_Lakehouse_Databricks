@@ -88,35 +88,3 @@ On Databricks Free Edition you can also clone the GitHub repository into a Datab
 The bundle definitions create bundle-managed jobs by default. Because this project already has manually created batch and streaming jobs, validate the new definitions before deciding which set to keep. To adopt an existing job instead of creating a duplicate, Databricks supports `databricks bundle generate job --existing-job-id <JOB_ID> --bind` or `databricks bundle deployment bind <resource_key> <JOB_ID>`. Review the generated/diffed configuration before the next deploy because the bundle becomes the source of truth for the bound job.
 
 Do not bind both the `dev` and `prod` targets to the same remote job in the single Free Edition workspace. Pick the target that you want to own that job.
-
-## GitHub Actions configuration
-
-Create a GitHub environment called `production`. If your Free Edition workspace allows a personal access token, store these repository/environment secrets:
-
-- `DATABRICKS_HOST` — workspace URL
-- `DATABRICKS_TOKEN` — PAT; never store it in YAML or source code
-
-Then:
-
-- pull requests and feature branches run CI
-- merges/pushes to `main` deploy the bundle
-- the workflow deploys job definitions/code but does **not** automatically run the ETL, avoiding accidental quota usage
-
-### Production account upgrade path
-
-For a paid/enterprise Databricks account:
-
-1. Create account-level groups such as `data_engineers`, `data_analysts`, and `data_stewards`.
-2. Create a CI/CD service principal.
-3. Replace PAT authentication in GitHub with OAuth workload identity federation/OIDC.
-4. Change the `prod` bundle target to `mode: production`, use a team/service-principal-owned deployment path, and set `run_as` to the service principal.
-5. Apply the least-privilege grants from `Governance/rbac_enterprise_template.sql`.
-6. If multiple sensitive tables are added, move from per-table secure views to centralized ABAC policies with governed tags.
-
-## Why the masked view is used
-
-The current customer dimension contains direct identifiers (`firstname`, `lastname`) and date of birth. The secure view protects those columns without changing the underlying Gold table or breaking the existing fact/dimension joins. In the Free Edition implementation, the identity that runs the governance bootstrap is treated as the privileged owner; other users querying the secure view receive masked/generalized values.
-
-**Important:** the view becomes an actual consumer security boundary only when consumers are *not* also granted `SELECT` on the underlying `gold_dim_customers` table. The enterprise RBAC template follows that pattern. The table owner/workspace administrator can still access the raw table by design.
-
-Row-level filtering is not added because the sample model does not contain a clear tenant/department/region ownership field that would make a legitimate row-security rule possible. In a real multi-team environment, use an account group or Unity Catalog ABAC policy instead of the deployer-user check.

@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC # Silver - ERP Product Category
 # MAGIC Cleans `bronze_erp_px_cat_g1v2` using the shared config and shared transformation functions.

@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC # Silver - ERP Customer Location
 # MAGIC Cleans `bronze_erp_loc_a101` using the shared config and shared transformation functions.
