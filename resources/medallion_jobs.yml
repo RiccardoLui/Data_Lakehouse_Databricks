@@ -1,0 +1,70 @@
+resources:
+  jobs:
+    medallion_batch_pipeline:
+      name: medallion-batch-pipeline
+      max_concurrent_runs: 1
+      tags:
+        architecture: medallion
+        ingestion: batch
+      tasks:
+        - task_key: bronze_batch
+          notebook_task:
+            notebook_path: ../Bronze/Bronze.ipynb
+
+        - task_key: silver_transform
+          depends_on:
+            - task_key: bronze_batch
+          notebook_task:
+            notebook_path: ../Silver/modular/notebooks/Silver_orchestration.py
+
+        - task_key: gold_transform
+          depends_on:
+            - task_key: silver_transform
+          notebook_task:
+            notebook_path: ../Gold/Gold_orchestration.ipynb
+
+        - task_key: governance_refresh
+          depends_on:
+            - task_key: gold_transform
+          notebook_task:
+            notebook_path: ../Governance/governance_setup.py
+
+    medallion_streaming_pipeline:
+      name: medallion-streaming-pipeline
+      max_concurrent_runs: 1
+      tags:
+        architecture: medallion
+        ingestion: autoloader
+      parameters:
+        - name: batch_id
+          default: ${var.default_batch_id}
+      tasks:
+        # Simulates arrival of the next CSV batch in the landing volume.
+        - task_key: release_batch
+          notebook_task:
+            notebook_path: ../Setup/Data_ingestion.ipynb
+
+        # Auto Loader processes only the newly arrived CRM files.
+        - task_key: autoloader_ingestion
+          depends_on:
+            - task_key: release_batch
+          notebook_task:
+            notebook_path: ../Setup/Auto_loader.ipynb
+
+        - task_key: silver_transform
+          depends_on:
+            - task_key: autoloader_ingestion
+          notebook_task:
+            notebook_path: ../Silver/modular/notebooks/Silver_orchestration.py
+
+        - task_key: gold_transform
+          depends_on:
+            - task_key: silver_transform
+          notebook_task:
+            notebook_path: ../Gold/Gold_orchestration.ipynb
+
+        - task_key: governance_refresh
+          depends_on:
+            - task_key: gold_transform
+          notebook_task:
+            notebook_path: ../Governance/governance_setup.py

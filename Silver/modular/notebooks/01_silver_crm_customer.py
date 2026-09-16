@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC # Silver - CRM Customer
 # MAGIC Cleans `bronze_crm_cust_info` using the shared config and shared transformation functions.

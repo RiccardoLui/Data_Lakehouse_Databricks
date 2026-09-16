@@ -1,0 +1,44 @@
+bundle:
+  name: data_lakehouse_databricks
+
+include:
+  - resources/*.yml
+
+# Deploy only runtime assets. Raw datasets, CI definitions, and documentation stay in Git.
+sync:
+  exclude:
+    - datasets/**
+    - .github/**
+    - ci/**
+    - "**/*.md"
+
+variables:
+  default_batch_id:
+    description: Batch number released by the simulated streaming-ingestion job.
+    default: "1"
+
+targets:
+  dev:
+    default: true
+    mode: development
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    permissions:
+      - user_name: ${workspace.current_user.userName}
+        level: CAN_MANAGE
+
+  # Free Edition has a single workspace and is intended for learning/non-commercial use.
+  # This target gives you a stable "production-like" deployment without requiring
+  # account-level service principals, which Free Edition cannot fully administer.
+  prod:
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    permissions:
+      - user_name: ${workspace.current_user.userName}
+        level: CAN_MANAGE
+    presets:
+      name_prefix: "[prod] "
+      jobs_max_concurrent_runs: 1
+      tags:
+        environment: prod
+        managed_by: declarative_automation_bundles

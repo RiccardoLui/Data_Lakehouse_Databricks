@@ -1,0 +1,32 @@
+name: Deploy Databricks bundle with OIDC
+
+# Enterprise template only. Copy to .github/workflows after configuring a
+# Databricks service principal + GitHub federation policy.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: databricks-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DATABRICKS_AUTH_TYPE: github-oidc
+      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ vars.DATABRICKS_CLIENT_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - run: databricks bundle validate --target prod
+      - run: databricks bundle deploy --target prod
+      - run: databricks bundle summary --target prod
